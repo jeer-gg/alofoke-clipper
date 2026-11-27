@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Descomprimir el zip y subir los archivos
         run: |
           if [ ! -f alofoke-clipper.zip ]; then echo "Falta subir alofoke-clipper.zip"; exit 0; fi
@@ -37,33 +36,24 @@ jobs:
     concurrency:
       group: clipper
       cancel-in-progress: false
-
     runs-on: ubuntu-latest
     timeout-minutes: 300
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Instalar ffmpeg y fuentes
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
-
       - name: Instalar dependencias
         run: pip install -U -r requirements.txt
-
       - name: Instalar Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
       - name: Actualizar yt-dlp y EJS
-        run: |
-          python -m pip install -U "yt-dlp[default]"
-
+        run: python -m pip install -U "yt-dlp[default]"
       - name: Verificar instalaciones
         run: |
           python --version
@@ -71,8 +61,8 @@ jobs:
           python -m yt_dlp --version
           python -m pip show yt-dlp-ejs
           ffmpeg -version
-
       - name: Diagnosticar yt-dlp
+        if: ${{ vars.DRIVE_CARPETA == '' }}
         continue-on-error: true
         timeout-minutes: 3
         env:
@@ -84,10 +74,8 @@ jobs:
             --socket-timeout 30 \
             --retries 2 \
             -v -F "$URL"
-
       - name: Instalar Claude Code
         run: npm install -g @anthropic-ai/claude-code
-
       - name: Instalar Codex
         env:
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
@@ -98,13 +86,11 @@ jobs:
             printf '%s' "$CODEX_AUTH_JSON" > ~/.codex/auth.json
             chmod 600 ~/.codex/auth.json
           fi
-
       - name: Cache del modelo Whisper
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
           key: whisper-${{ vars.WHISPER_MODELO || 'small' }}
-
       - name: Correr el bot
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,6 +102,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODELO: ${{ vars.GEMINI_MODELO }}
+          GEMINI_ALTERNATIVOS: ${{ vars.GEMINI_ALTERNATIVOS }}
+          DRIVE_CARPETA: ${{ vars.DRIVE_CARPETA }}
           CANAL_LIVE_URL: ${{ vars.CANAL_LIVE_URL }}
           MAX_POR_DIA: ${{ vars.MAX_POR_DIA }}
           PUNTAJE_MINIMO: ${{ vars.PUNTAJE_MINIMO }}
