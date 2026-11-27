@@ -39,7 +39,7 @@ ZOOM = float(_str("ZOOM", "0.75"))            # fracción del ancho original que
 
 # --- Publicación ---
 ZONA = ZoneInfo("America/Santo_Domingo")
-MAX_POR_DIA = min(15, max(0, _int("MAX_POR_DIA", 15)))              # por página: Meta permite 30 Reels por API cada 24 h
+MAX_POR_DIA = min(17, max(0, _int("MAX_POR_DIA", 17)))              # por página: Meta permite 30 Reels por API cada 24 h
 HORA_INICIO = _int("HORA_INICIO", 7)               # publica desde las 7 a.m.
 HORA_FIN = _int("HORA_FIN", 23)                    # hasta medianoche
 MIN_ENTRE_POSTS = _int("MIN_ENTRE_POSTS", 30)      # minutos mínimos entre Reels
@@ -87,3 +87,6 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 REPO = os.getenv("GITHUB_REPOSITORY", "")
 MODO_PRUEBA = os.getenv("MODO_PRUEBA", "0") == "1"  # 1 = no publica, solo manda por Telegram
+
+# Subtítulos discretos opcionales (0 = estilo limpio).
+SUBTITULOS = _str("SUBTITULOS", "0") == "1"

@@ -6,7 +6,7 @@ class TestReparto(unittest.TestCase):
     def test_horarios(self):
         for pagina in (0,1):
             ventanas = {reparto.turno(datetime(2026,11,27,h,m),pagina) for h in range(24) for m in range(60)} - {None}
-            self.assertEqual(len(ventanas),15)
+            self.assertEqual(len(ventanas),17)
         for h in range(24):
             for m in range(60):
                 t = datetime(2026,11,27,h,m)

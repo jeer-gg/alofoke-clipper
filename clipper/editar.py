@@ -1,4 +1,4 @@
-"""Convierte un pedazo del directo en un Reel 9:16 con título y subtítulos grandes."""
+"""Edición cuadrada adaptativa local, sin consultas adicionales de IA."""
 import subprocess
 import os
 import re
@@ -6,7 +6,7 @@ import tempfile
 
 from . import config
 
-ANCHO, ALTO = 1080, 1920
+ANCHO, ALTO = 1080, 1080
 
 
 def _t(seg):
@@ -50,13 +50,13 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Titulo,DejaVu Sans,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,3,2,60,60,0,1
-Style: Sub,DejaVu Sans,84,&H0000E5FF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,5,50,50,0,1
+Style: Sub,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,5,50,50,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    eventos = [f"Dialogue: 1,{_t(0)},{_t(dur)},Titulo,,0,0,0,,"
-               f"{{\\pos({ANCHO // 2},{y_titulo})\\fad(150,0)}}{_partir_titulo(clip['titulo'].upper())}"]
+    eventos = []
+    y_subs = 850
 
     palabras = [w for s in segmentos for w in s["palabras"] if w["fin"] > ini and w["inicio"] < fin]
     grupo = []
@@ -78,29 +78,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 
-def _congelamiento_inicial(video):
-    """Devuelve el final de un congelamiento inicial, o 0 si no lo hay.
-
-    Examina el centro del video, sin título ni subtítulos. Si no vuelve el
-    movimiento dentro de 8 segundos, el clip se considera defectuoso.
-    """
+def _congelamiento_inicial(video, bruto=False):
+    """Detecta inmovilidad inicial en la imagen, no en los textos animados."""
+    import numpy as np
+    # En el Reel se analiza toda la franja central, sin título ni subtítulos.
+    region = "" if bruto else "crop=iw:ih*0.70,"
     r = subprocess.run([
-        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "info",
-        "-i", video, "-t", "8", "-an",
-        "-vf", "crop=iw*0.8:ih*0.25,scale=320:-2,freezedetect=n=-50dB:d=0.65",
-        "-f", "null", "-"
-    ], capture_output=True, text=True, timeout=60, check=True)
-    eventos = re.findall(r"lavfi\.freezedetect\.freeze_(start|end):\s*([0-9.eE+-]+)", r.stderr)
-    for i, (tipo, valor) in enumerate(eventos):
-        if tipo != "start":
-            continue
-        if float(valor) > 0.35:
-            return 0.0
-        for tipo2, valor2 in eventos[i+1:]:
-            if tipo2 == "end":
-                return float(valor2)
-        raise RuntimeError("imagen congelada al inicio sin recuperación en 8 s")
-    return 0.0
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-i", video, "-t", "12", "-an",
+        "-vf", region + "fps=10,scale=320:96,format=gray",
+        "-f", "rawvideo", "-pix_fmt", "gray", "-"
+    ], capture_output=True, timeout=90, check=True)
+    n = 320 * 96
+    if len(r.stdout) < n * 6 or len(r.stdout) % n:
+        raise RuntimeError("no hay suficientes fotogramas para verificar el inicio")
+    frames = np.frombuffer(r.stdout, dtype=np.uint8).reshape(-1, 96, 320).astype(np.int16)
+    # Diferencia con el primer cuadro en bloques: tolera ruido de compresión
+    # y detecta movimiento localizado aunque el resto de la escena sea estático.
+    diff = np.abs(frames - frames[0]).reshape(-1, 6, 16, 10, 32).mean(axis=(2,4))
+    movimiento = (diff.max(axis=(1,2)) >= 2.5) | (diff.mean(axis=(1,2)) >= 0.65)
+    for i in range(1, len(frames)-2):
+        if movimiento[i:i+3].all():
+            return 0.0 if i < 6 else i / 10
+    raise RuntimeError("inicio inmóvil sin recuperación verificable en 12 s")
 
 
 def corregir_inicio(video, minimo=1.0):
@@ -131,30 +131,66 @@ def corregir_inicio(video, minimo=1.0):
             os.remove(temporal)
 
 def editar(video, clip, segmentos, salida, ancho_fuente=1280, alto_fuente=720):
-    alto_video = int(round(ANCHO / (ancho_fuente * config.ZOOM / alto_fuente) / 2) * 2)
+    # Primero se decodifica el fragmento sin overlays. El seek de salida evita
+    # depender de un fotograma clave anterior para el comienzo exacto.
+    alto_video = ALTO
     ass = salida.replace(".mp4", ".ass")
-    crear_ass(clip, segmentos, ass, alto_video)
-    filtro = (
-        "[0:v]split[a][b];"
-        f"[a]scale={ANCHO}:{ALTO}:force_original_aspect_ratio=increase,crop={ANCHO}:{ALTO},"
-        "boxblur=25:2,eq=brightness=-0.18[fondo];"
-        f"[b]crop=iw*{config.ZOOM}:ih,scale={ANCHO}:{alto_video}[frente];"
-        f"[fondo][frente]overlay=(W-w)/2:(H-h)/2,ass={ass},fps=30,format=yuv420p[v]"
-    )
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-           "-fflags", "+genpts", "-ss", f"{clip['inicio']:.2f}", "-accurate_seek", "-i", video,
-           "-filter_complex", filtro, "-map", "[v]", "-map", "0:a?",
-           "-af", "dynaudnorm=f=150:g=15:p=0.9:m=10,loudnorm=I=-14:TP=-1.5:LRA=11",
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-           "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
-           "-t", f"{clip['fin'] - clip['inicio']:.2f}", "-movflags", "+faststart", salida]
+    minimo = config.CLIP_MIN_SEG * 0.7
+    inicio, fin = float(clip["inicio"]), float(clip["fin"])
     try:
-        subprocess.run(cmd, check=True)
-        corregir_inicio(salida, minimo=config.CLIP_MIN_SEG * 0.7)
+        with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(salida))) as tmp:
+            bruto = os.path.join(tmp, "bruto.mp4")
+            # Seek grueso 10 s antes, seguido de seek preciso al decodificar.
+            grueso = max(0, inicio - 10)
+            subprocess.run([
+                "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+                "-fflags", "+genpts", "-ss", str(grueso), "-i", video,
+                "-ss", str(inicio-grueso), "-t", str(fin-inicio),
+                "-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=iw*sar:ih,setsar=1,fps=30",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", bruto
+            ], check=True, timeout=240)
+            corte = _congelamiento_inicial(bruto, bruto=True)
+            disponible = min(fin-inicio, duracion(bruto))
+            if disponible - corte < minimo:
+                raise RuntimeError("fragmento demasiado corto después de validar inicio")
+            ajustado = dict(clip, inicio=inicio+corte, fin=inicio+disponible)
+            if corte:
+                print(f"[editar] congelamiento fuente eliminado: {corte:.2f} s")
+            from . import encuadre
+            limpio = os.path.join(tmp, "limpio.mp4")
+            subprocess.run([
+                "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+                "-i", bruto, "-ss", str(corte), "-t", str(disponible-corte),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                "-c:a", "aac", limpio
+            ], check=True, timeout=240)
+            # Confirmar movimiento real antes de que el zoom pueda ocultar un fallo.
+            if _congelamiento_inicial(limpio, bruto=True):
+                raise RuntimeError("la fuente todavía empieza congelada")
+            visual = os.path.join(tmp, "visual.mp4")
+            encuadre.renderizar(limpio, visual)
+            filtro = "setsar=1"
+            if config.SUBTITULOS:
+                crear_ass(ajustado, segmentos, ass, alto_video)
+                filtro += ",ass=" + ass
+            subprocess.run([
+                "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+                "-i", visual, "-i", limpio, "-map", "0:v:0", "-map", "1:a:0?",
+                "-vf", filtro, "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+                "-ar", "48000", "-shortest", "-movflags", "+faststart", salida
+            ], check=True, timeout=360)
+            corregir_inicio(salida, minimo=minimo)
+            print("[editar] inicio verificado: " + os.path.basename(salida))
     except Exception:
         if os.path.exists(salida):
             os.remove(salida)
         raise
+    finally:
+        if os.path.exists(ass):
+            os.remove(ass)
     return salida
 
 
@@ -176,3 +212,17 @@ def duracion(video):
         return float(r.stdout.strip())
     except ValueError:
         return 0.0
+
+
+def marcar_pagina(video, salida, nombre):
+    """Marca textual propia, sin reutilizar logos ajenos."""
+    with tempfile.TemporaryDirectory() as tmp:
+        texto = os.path.join(tmp, 'marca.txt')
+        with open(texto, 'w', encoding='utf-8') as f:
+            f.write(str(nombre).replace('\n', ' ')[:60])
+        filtro = ('drawtext=font=DejaVu Sans:fontcolor=white:fontsize=32:'
+                  f'textfile={texto}:expansion=none:x=36:y=h-th-85:'
+                  'box=1:boxcolor=black@0.65:boxborderw=12')
+        subprocess.run(['ffmpeg','-y','-nostdin','-loglevel','error','-i',video,
+                        '-vf',filtro,'-c:v','libx264','-preset','veryfast','-crf','20',
+                        '-c:a','copy','-movflags','+faststart',salida],check=True,timeout=240)

@@ -3,3 +3,5 @@ gdown
 faster-whisper
 numpy
 requests
+
+opencv-python-headless

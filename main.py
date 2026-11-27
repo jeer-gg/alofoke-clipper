@@ -160,7 +160,7 @@ class Bot:
         return self.estado.setdefault("paginas", {}).setdefault(pid, {"publicaciones": []})
 
     def puede_publicar(self, pagina):
-        """Máximo de 15 en 24 h y un clip por ventana local."""
+        """Máximo de 17 en 24 h y un clip por ventana local."""
         t = time.time()
         p = self._pagina(pagina["id"])
         p["publicaciones"] = [x for x in p["publicaciones"] if t - x < 86400]
@@ -197,6 +197,16 @@ class Bot:
             if not ruta:
                 self.cola.pop(0)
                 continue
+            try:
+                if editar.tamano_video(ruta) != (1080, 1080) or editar.duracion(ruta) < config.CLIP_MIN_SEG * 0.7 or editar._congelamiento_inicial(ruta):
+                    raise RuntimeError("inicio congelado o clip corto en cola")
+            except Exception as e:
+                print(f"[main] descarto clip de cola no validado: {clip['nombre']}: {e}")
+                self.cola.pop(0)
+                cola.borrar(clip["nombre"] + ".mp4", clip["nombre"] + ".json")
+                if os.path.exists(ruta):
+                    os.remove(ruta)
+                continue
             datos = self._pagina(pagina["id"])
             nombre = pagina["nombre"]
             try:
@@ -222,7 +232,11 @@ class Bot:
                     datos.pop("ultimo_turno", None)
                     print("[main] sin persistencia de reserva; no publico")
                     return
-                vid = publicar.reel(ruta, descripcion(clip), pagina["id"], pagina["token"])
+                import tempfile
+                with tempfile.TemporaryDirectory() as tmp_marca:
+                    marcado = os.path.join(tmp_marca, "reel.mp4")
+                    editar.marcar_pagina(ruta, marcado, nombre)
+                    vid = publicar.reel(marcado, descripcion(clip), pagina["id"], pagina["token"])
                 reserva["video_id"] = vid
                 self._guardar_estado()
                 estado_fb = publicar.estado_reel(vid, pagina["token"])
