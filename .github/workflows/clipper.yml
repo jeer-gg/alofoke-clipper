@@ -122,6 +122,7 @@ jobs:
           ELEGIDORES: ${{ vars.ELEGIDORES }}
           SEGMENTO_SEG: ${{ vars.SEGMENTO_SEG }}
           CLIPS_POR_SEGMENTO: ${{ vars.CLIPS_POR_SEGMENTO }}
+          MEMES_SELECTIVOS: ${{ vars.MEMES_SELECTIVOS }}
           SUBTITULOS: ${{ vars.SUBTITULOS }}
           PYTHONUNBUFFERED: "1"
         run: python -u main.py
