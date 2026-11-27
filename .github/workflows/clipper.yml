@@ -47,7 +47,15 @@ jobs:
       - name: Instalar ffmpeg y fuentes
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
       - name: Instalar dependencias
-        run: pip install -U -r requirements.txt
+        run: python -m pip install -U -r requirements.txt
+      - name: Reparar instalacion OpenCV
+        run: |
+          python -m pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless
+          python -m pip install --no-cache-dir "opencv-python-headless==4.11.0.86"
+      - name: Verificar editor local
+        run: |
+          python -c 'from clipper.encuadre import verificar_opencv; print("OpenCV OK:", verificar_opencv())'
+          python -m unittest discover -s tests -p test_encuadre.py
       - name: Instalar Deno
         uses: denoland/setup-deno@v2
         with:
@@ -106,7 +114,7 @@ jobs:
           GEMINI_ALTERNATIVOS: ${{ vars.GEMINI_ALTERNATIVOS }}
           DRIVE_CARPETA: ${{ vars.DRIVE_CARPETA }}
           CANAL_LIVE_URL: ${{ vars.CANAL_LIVE_URL }}
-          MAX_POR_DIA: "15"
+          MAX_POR_DIA: "17"
           PUNTAJE_MINIMO: "7"
           WHISPER_MODELO: ${{ vars.WHISPER_MODELO }}
           MODO_PRUEBA: ${{ vars.MODO_PRUEBA }}
@@ -114,5 +122,6 @@ jobs:
           ELEGIDORES: ${{ vars.ELEGIDORES }}
           SEGMENTO_SEG: ${{ vars.SEGMENTO_SEG }}
           CLIPS_POR_SEGMENTO: ${{ vars.CLIPS_POR_SEGMENTO }}
+          SUBTITULOS: ${{ vars.SUBTITULOS }}
           PYTHONUNBUFFERED: "1"
         run: python -u main.py
