@@ -106,11 +106,11 @@ jobs:
           GEMINI_ALTERNATIVOS: ${{ vars.GEMINI_ALTERNATIVOS }}
           DRIVE_CARPETA: ${{ vars.DRIVE_CARPETA }}
           CANAL_LIVE_URL: ${{ vars.CANAL_LIVE_URL }}
-          MAX_POR_DIA: ${{ vars.MAX_POR_DIA }}
-          PUNTAJE_MINIMO: ${{ vars.PUNTAJE_MINIMO }}
+          MAX_POR_DIA: "15"
+          PUNTAJE_MINIMO: "7"
           WHISPER_MODELO: ${{ vars.WHISPER_MODELO }}
           MODO_PRUEBA: ${{ vars.MODO_PRUEBA }}
-          ENVIAR_TODOS_TELEGRAM: ${{ vars.ENVIAR_TODOS_TELEGRAM }}
+          ENVIAR_TODOS_TELEGRAM: "1"
           ELEGIDORES: ${{ vars.ELEGIDORES }}
           SEGMENTO_SEG: ${{ vars.SEGMENTO_SEG }}
           CLIPS_POR_SEGMENTO: ${{ vars.CLIPS_POR_SEGMENTO }}
