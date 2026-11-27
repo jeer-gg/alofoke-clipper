@@ -37,7 +37,9 @@ es una canción sonando (la música genera reclamos de derechos), desnudos, agre
 o cualquier cosa contra las normas de Meta.
 - No elijas un momento que ya esté empezado en el segundo 00:00 o que siga después del final: \
 tiene que estar completo dentro de este pedazo.
-- Si nada vale la pena, devuelve una lista vacía. Mejor ningún clip que uno flojo.
+- Busca también humor espontáneo, anécdotas, respuestas ingeniosas, desacuerdos cotidianos, revelaciones, conversaciones curiosas y reacciones verbales que tengan un remate claro. No hace falta una pelea.
+- Prioriza momentos de 9-10 y luego 7-8. Solo propone clips con puntuación de al menos {umbral}; no infles puntuaciones para llenar cupos. Si ninguno cumple, devuelve una lista vacía.
+- Usa marcas temporales dentro de 00:00 a {fin_real}; no redondees más allá del final. Revisa duración antes de responder.
 - "titulo": gancho corto en MAYÚSCULAS (máx. 8 palabras), estilo farándula dominicana, sin emojis, \
 sin inventar cosas que no se dicen. Usa los nombres o apodos que se mencionan.
 - "descripcion": 1 o 2 frases que den contexto y una pregunta para que la gente comente. Sin emojis.
@@ -75,30 +77,44 @@ def parsear(texto, duracion_total):
     if not isinstance(datos, dict) or not isinstance(datos.get("clips"), list):
         return None
     clips = []
-    for c in datos["clips"]:
+    candidatos = datos["clips"]
+    print(f"[elegir] candidatos recibidos: {len(candidatos)}")
+    for i, c in enumerate(candidatos, 1):
+        motivo = None
         try:
             ini, fin = _a_segundos(c["inicio"]), _a_segundos(c["fin"])
-            puntaje = int(c["puntaje"])
+            valor = float(c["puntaje"])
+            if not math.isfinite(valor) or not valor.is_integer():
+                raise ValueError("puntaje no entero")
+            puntaje = int(valor)
             titulo, descripcion = c["titulo"], c["descripcion"]
-            if not all(math.isfinite(x) for x in (ini, fin)):
-                continue
-            if not (0 <= ini < fin <= duracion_total and 1 <= puntaje <= 10):
-                continue
-            if not isinstance(titulo, str) or not titulo.strip() or not isinstance(descripcion, str):
-                continue
-            if not config.CLIP_MIN_SEG <= fin - ini <= config.CLIP_MAX_SEG:
-                continue
+            if not all(math.isfinite(x) for x in (ini, fin)) or not (0 <= ini < fin <= duracion_total):
+                motivo = "tiempos fuera del segmento"
+            elif not 1 <= puntaje <= 10:
+                motivo = "puntaje fuera de rango"
+            elif not isinstance(titulo, str) or not titulo.strip() or not isinstance(descripcion, str):
+                motivo = "titulo o descripcion invalidos"
+            elif not config.CLIP_MIN_SEG <= fin - ini <= config.CLIP_MAX_SEG:
+                motivo = f"duracion {fin-ini:.1f}s fuera del rango"
         except (KeyError, ValueError, TypeError, OverflowError):
+            motivo = "campos faltantes o invalidos"
+        if motivo:
+            print(f"[elegir] candidato {i} descartado: {motivo}")
             continue
         clips.append({"inicio": ini, "fin": fin, "titulo": titulo.strip()[:80],
                       "descripcion": descripcion.strip()[:400], "puntaje": puntaje})
-    return clips if clips or not datos["clips"] else None
+    if not candidatos:
+        print("[elegir] la IA devolvio una lista vacia")
+    elif not clips:
+        print("[elegir] todos los candidatos fallaron la validacion")
+    return clips if clips or not candidatos else None
 
 
 def _armar_prompt(segmentos, picos_seg, duracion_total):
     return PROMPT.format(
         duracion=round(duracion_total / 60), n=config.CLIPS_POR_SEGMENTO,
         min_s=config.CLIP_MIN_SEG, max_s=config.CLIP_MAX_SEG,
+        umbral=config.PUNTAJE_MINIMO, fin_real=_mmss(duracion_total),
         picos=", ".join(_mmss(p) for p in picos_seg) or "ninguno",
         transcripcion=_transcripcion_compacta(segmentos))
 
@@ -313,6 +329,13 @@ def elegir(segmentos, z, picos_seg, duracion_total):
     if clips is None:
         print("[elegir] uso el método de respaldo")
         clips = respaldo(segmentos, z, duracion_total)
-    clips = sin_repetidos(clips)
+    aptos = []
+    for c in clips:
+        if c["puntaje"] < config.PUNTAJE_MINIMO:
+            print(f"[elegir] descartado por puntaje {c['puntaje']}/10 (minimo {config.PUNTAJE_MINIMO})")
+            continue
+        aptos.append(c)
+    clips = sin_repetidos(aptos)
+    print(f"[elegir] descartados por solapamiento: {len(aptos)-len(clips)}")
     print(f"[elegir] {len(clips)} clips: " + "; ".join(f"{c['puntaje']} {c['titulo']}" for c in clips))
     return clips[: config.CLIPS_POR_SEGMENTO]

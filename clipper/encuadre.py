@@ -1,5 +1,8 @@
 """Reencuadre cuadrado: detección facial local y movimiento, no identificación."""
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 import numpy as np
 import subprocess
 
@@ -25,7 +28,7 @@ def recorte(frame, centro):
     return cv2.resize(frame[y:y+lado,x:x+lado], (1080,1080), interpolation=cv2.INTER_LINEAR)
 
 
-def renderizar(origen, salida):
+def _renderizar_dinamico(origen, salida):
     cv2.setNumThreads(2)
     detector = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml')
     if detector.empty(): raise RuntimeError('detector facial no disponible')
@@ -70,3 +73,33 @@ def renderizar(origen, salida):
         if proc.poll() is None:
             proc.kill(); proc.wait()
     print(f'[encuadre] {n} cuadros; recorte cuadrado dinámico local')
+
+
+def verificar_opencv():
+    if cv2 is None:
+        raise RuntimeError("OpenCV no disponible")
+    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    if detector.empty():
+        raise RuntimeError("clasificador facial vacío")
+    return cv2.__version__
+
+
+def _centrado(origen, salida):
+    subprocess.run(["ffmpeg", "-y", "-nostdin", "-loglevel", "error",
+                    "-i", origen, "-an", "-vf",
+                    "crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080,setsar=1,fps=30",
+                    "-c:v", "libx264", "-threads", "2", "-preset", "veryfast",
+                    "-crf", "18", "-pix_fmt", "yuv420p", salida],
+                   check=True, timeout=360)
+
+
+def renderizar(origen, salida):
+    import os
+    try:
+        verificar_opencv()
+        _renderizar_dinamico(origen, salida)
+    except Exception as exc:
+        print(f"[encuadre] zoom no disponible ({type(exc).__name__}); recorte centrado de respaldo")
+        if os.path.exists(salida):
+            os.remove(salida)
+        _centrado(origen, salida)

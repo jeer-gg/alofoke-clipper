@@ -43,6 +43,7 @@ class Bot:
         self.estado.pop("publicaciones", None)  # formato viejo (una sola página)
         self.producidos = 0
         self.sin_clips_seguidos = 0
+        self.segundos_sin_clips = 0.0
         self.cola_previa = None  # últimos segundos del pedazo anterior
 
     # ---------- producción ----------
@@ -66,8 +67,27 @@ class Bot:
         except subprocess.CalledProcessError:
             self.cola_previa = None
 
+    def _registrar_segmento(self, segundos, nuevos):
+        if nuevos:
+            self.sin_clips_seguidos = 0
+            self.segundos_sin_clips = 0.0
+            return
+        self.sin_clips_seguidos += 1
+        self.segundos_sin_clips += segundos
+        print(f"[main] sin clips aptos: {self.sin_clips_seguidos} fragmentos, "
+              f"{self.segundos_sin_clips / 60:.1f} min de contenido analizado")
+        if self.sin_clips_seguidos >= 3:
+            publicar.telegram(
+                f"Bot Alofoke: {self.sin_clips_seguidos} fragmentos consecutivos "
+                f"({self.segundos_sin_clips / 60:.1f} minutos de contenido analizado) "
+                f"sin clips aptos de {config.PUNTAJE_MINIMO}/10 o mas. "
+                "Revisa los motivos de descarte en Actions.",
+                clave="sin_clips", cada_min=30)
+
     def procesar_segmento(self, original):
-        if editar.duracion(original) < 60:
+        dur_original = editar.duracion(original)
+        if dur_original < 60:
+            print("[main] fragmento demasiado corto; no analizado")
             return
         if config.FUENTE == "drive":  # cada grabación es independiente: sin solape
             video, solape = original, 0.0
@@ -81,16 +101,21 @@ class Bot:
             captura.extraer_audio(video, wav, wav_voz)
             segmentos = analisis.transcribir(wav_voz)
             if not segmentos:
+                print("[main] sin conversaciones transcritas")
+                self._registrar_segmento(dur_original, 0)
                 return
             z = analisis.energia_por_segundo(wav)
             elegidos = elegir.elegir(segmentos, z, analisis.picos(z), dur)
             # Un clip que termina dentro del solape ya lo vio la hora anterior.
+            antes = len(elegidos)
             elegidos = [c for c in elegidos if c["fin"] > solape + 5]
+            print(f"[main] descartados por solape previo: {antes-len(elegidos)}")
             ancho, alto = editar.tamano_video(video)
             sello = int(time.time())
             nuevos = 0
             for i, clip in enumerate(elegidos):
                 if not clip.get("revision_manual") and clip["puntaje"] < config.PUNTAJE_MINIMO:
+                    print(f"[main] descartado por puntaje: {clip['puntaje']}")
                     continue
                 nombre = f"clip-{sello}-{uuid.uuid4().hex[:10]}"
                 clip.update({"nombre": nombre, "huella": reparto.huella(" ".join(
@@ -98,6 +123,7 @@ class Bot:
                     if clip["inicio"] <= w["inicio"] < clip["fin"]))})
                 if not clip.get("revision_manual") and any(reparto.duplicado(clip, c)
                         for c in self.cola + self.estado.get("historial_clips", [])):
+                    print("[main] descartado por duplicado en cola o historial")
                     continue
                 salida = os.path.join(TRABAJO, nombre + ".mp4")
                 try:
@@ -128,11 +154,7 @@ class Bot:
                 nuevos += 1
                 if config.ENVIAR_TODOS_TELEGRAM:
                     publicar.telegram(f"[{clip['puntaje']}/10] {descripcion(clip)}", salida)
-            self.sin_clips_seguidos = 0 if nuevos else self.sin_clips_seguidos + 1
-            if self.sin_clips_seguidos >= 3:
-                publicar.telegram("Bot Alofoke: van 3 horas seguidas sin clips buenos. Revisa los "
-                                  "registros en Actions por si la IA o la transcripción fallan.",
-                                  clave="sin_clips", cada_min=180)
+            self._registrar_segmento(dur_original, nuevos)
             self.podar_cola()
         finally:
             for f in (wav, wav_voz, video if video != original else None):
