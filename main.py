@@ -100,12 +100,12 @@ class Bot:
         try:
             captura.extraer_audio(video, wav, wav_voz)
             segmentos = analisis.transcribir(wav_voz)
-            if not segmentos:
+            if not segmentos and not config.MEMES_SELECTIVOS:
                 print("[main] sin conversaciones transcritas")
                 self._registrar_segmento(dur_original, 0)
                 return
             z = analisis.energia_por_segundo(wav)
-            elegidos = elegir.elegir(segmentos, z, analisis.picos(z), dur)
+            elegidos = elegir.elegir(segmentos, z, analisis.picos(z), dur, video=video)
             # Un clip que termina dentro del solape ya lo vio la hora anterior.
             antes = len(elegidos)
             elegidos = [c for c in elegidos if c["fin"] > solape + 5]

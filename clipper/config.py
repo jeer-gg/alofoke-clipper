@@ -97,7 +97,9 @@ MODO_PRUEBA = _str("MODO_PRUEBA", "0") == "1"  # 1 = no publica, solo manda por 
 # Subtítulos discretos opcionales (0 = estilo limpio).
 SUBTITULOS = _str("SUBTITULOS", "0") == "1"
 
-print("[config] Versión: cuatro-paginas-vertical-v1")
+MEMES_SELECTIVOS = _str("MEMES_SELECTIVOS", "1") == "1"
+
+print("[config] Versión: cuatro-paginas-memes-selectivos-v1")
 print(f"[config] Whisper: {WHISPER_MODELO}; paginas: {len(FB_PAGINAS)}; maximo por pagina: {MAX_POR_DIA}; cola: {MAX_COLA}; edad: {MAX_EDAD_HORAS}h")
 
 for _i, _pagina in enumerate(FB_PAGINAS):
