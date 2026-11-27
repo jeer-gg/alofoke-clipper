@@ -46,7 +46,7 @@ MAX_POR_DIA = min(17, max(0, _int("MAX_POR_DIA", 17)))              # por págin
 HORA_INICIO = _int("HORA_INICIO", 7)               # publica desde las 7 a.m.
 HORA_FIN = _int("HORA_FIN", 23)                    # hasta medianoche
 MIN_ENTRE_POSTS = _int("MIN_ENTRE_POSTS", 30)      # minutos mínimos entre Reels
-MAX_COLA = _int("MAX_COLA", 150)                    # clips guardados como máximo
+MAX_COLA = _int("MAX_COLA", 200)                    # clips guardados como máximo
 MAX_EDAD_HORAS = min(24, max(1, _int("MAX_EDAD_HORAS", 24)))        # un clip más viejo ya no es noticia
 HASHTAGS = _str("HASHTAGS", "#LaCasaDeAlofoke3 #Alofoke #LaCasaDeAlofoke #RepublicaDominicana")
 
@@ -81,7 +81,7 @@ def _paginas():
 
 FB_PAGINAS = _paginas()
 # IDs únicos; conservar el orden del secreto para asignar los horarios.
-FB_PAGINAS = list({str(p["id"]).strip(): p for p in reversed(FB_PAGINAS)}.values())[::-1][:3]
+FB_PAGINAS = list({str(p["id"]).strip(): p for p in reversed(FB_PAGINAS)}.values())[::-1][:4]
 
 
 # El repositorio es público y sus registros también: GitHub oculta cada token individual.
@@ -97,4 +97,8 @@ MODO_PRUEBA = _str("MODO_PRUEBA", "0") == "1"  # 1 = no publica, solo manda por 
 # Subtítulos discretos opcionales (0 = estilo limpio).
 SUBTITULOS = _str("SUBTITULOS", "0") == "1"
 
+print("[config] Versión: cuatro-paginas-vertical-v1")
 print(f"[config] Whisper: {WHISPER_MODELO}; paginas: {len(FB_PAGINAS)}; maximo por pagina: {MAX_POR_DIA}; cola: {MAX_COLA}; edad: {MAX_EDAD_HORAS}h")
+
+for _i, _pagina in enumerate(FB_PAGINAS):
+    print(f"[config] Página {_i+1}: {_pagina.get('nombre', 'Página')}; minuto: {_i*(60//len(FB_PAGINAS)):02d}")

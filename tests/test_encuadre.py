@@ -21,4 +21,4 @@ class EncuadreTests(unittest.TestCase):
                 else:
                     encuadre.renderizar(fuente,salida)
                 info = subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=width,height','-of','csv=p=0',salida],text=True)
-                self.assertEqual(info.strip(),'1080,1080')
+                self.assertEqual(info.strip(),'1080,1920')

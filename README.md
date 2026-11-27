@@ -148,3 +148,6 @@ Agregar History Time como tercer objeto del secreto FB_PAGINAS. Con tres página
 
 ### Ranking de aprendizaje
 El resumen de Telegram muestra los tres Reels con más reproducciones medidas por página. El aprendizaje incorpora formato, duración real, tema, gancho y puntuación; conserva el filtro mínimo de 7 y ajusta únicamente la prioridad de la cola. Las cifras son reproducciones, no espectadores únicos ni retención. No añade consultas de Gemini.
+
+### Cuatro páginas
+Añadir la cuarta al final de FB_PAGINAS. Ventanas de 15 minutos (:00, :15, :30, :45), de 07 a 23. Hasta 17 por página en 24 h; cola 200; edad 24 h. El editor prioriza vertical, conserva cuadrado en escenas amplias persistentes. Sin consultas adicionales a Gemini.

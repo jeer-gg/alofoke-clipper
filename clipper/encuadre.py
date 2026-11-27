@@ -34,6 +34,7 @@ def _formato(origen, detector):
     cap = cv2.VideoCapture(origen)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     vistos = 0
+    amplios = 0
     try:
         for n in np.linspace(0, max(0,total-1), 12):
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(n))
@@ -47,9 +48,9 @@ def _formato(origen, detector):
                 vistos += 1
                 izquierda = min(x for x,y,a,b in caras)
                 derecha = max(x+a for x,y,a,b in caras)
-                if (derecha-izquierda)/escala > min(w,h*9/16)*.78:
-                    return 1
-        return 9/16 if vistos >= 3 else 1
+                if (derecha-izquierda)/escala > min(w,h*9/16)*.95:
+                    amplios += 1
+        return 1 if vistos >= 3 and amplios / vistos >= .75 else 9/16
     finally:
         cap.release()
 
@@ -115,7 +116,7 @@ def verificar_opencv():
 def _centrado(origen, salida):
     subprocess.run(["ffmpeg", "-y", "-nostdin", "-loglevel", "error",
                     "-i", origen, "-an", "-vf",
-                    "crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080,setsar=1,fps=30",
+                    "crop='trunc(min(iw,ih*9/16)/2)*2':'trunc(min(ih,iw*16/9)/2)*2',scale=1080:1920,setsar=1,fps=30",
                     "-c:v", "libx264", "-threads", "2", "-preset", "veryfast",
                     "-crf", "18", "-pix_fmt", "yuv420p", salida],
                    check=True, timeout=360)

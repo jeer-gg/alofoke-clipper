@@ -7,8 +7,8 @@ HORAS = tuple(range(7, 24))
 
 
 def turno(fecha, indice, total=3):
-    """17 ventanas por página; 20 min para tres, 30 para dos."""
-    if total not in (1, 2, 3) or not 0 <= indice < total:
+    """17 ventanas por página; 15 min para cuatro, 20 para tres, 30 para dos."""
+    if total not in (1, 2, 3, 4) or not 0 <= indice < total:
         return None
     if fecha.hour not in HORAS:
         return None
