@@ -32,7 +32,11 @@ def preparar():
 def descargar(carpeta):
     """Baja estado.json y los .json de la cola. Los .mp4 se bajan solo al publicarlos."""
     os.makedirs(carpeta, exist_ok=True)
-    _gh("release", "download", TAG, "-D", carpeta, "-p", "*.json", "--clobber")
+    inventario = _gh("release", "view", TAG, "--json", "assets", "-q", ".assets[].name", check=True)
+    if any(n.endswith(".json") for n in inventario.stdout.splitlines()):
+        _gh("release", "download", TAG, "-D", carpeta, "-p", "*.json", "--clobber", check=True)
+    if "estado.json" in inventario.stdout.splitlines() and not os.path.exists(os.path.join(carpeta, "estado.json")):
+        raise RuntimeError("No se pudo recuperar el estado de publicaciones")
     estado_ruta = os.path.join(carpeta, "estado.json")
     estado = {}
     if os.path.exists(estado_ruta):

@@ -132,3 +132,6 @@ Para arreglarlo:
 - El respaldo sin IA queda exclusivamente para revisión manual en Telegram si `ENVIAR_TODOS_TELEGRAM=1` o `MODO_PRUEBA=1`; no entra a la cola de Facebook.
 - El ZIP no instala por sí mismo el workflow: actualizar `.github/workflows/clipper.yml` por separado.
 - Pruebas locales simuladas: `python -m unittest discover -s tests -v`. No verifican una clave real ni la cuota de Google.
+
+## Reparto de dos páginas (hora dominicana)
+Las dos primeras páginas de FB_PAGINAS reciben hasta 15 clips cada una en 24 horas. Ventanas de 30 minutos desde las 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21 y 22; la segunda página empieza 30 minutos después. Si no hay clip o el proceso está ocupado, la ventana se pierde. Se prioriza puntaje y luego fecha de creación; mínimo 7 y antigüedad de cola 6 horas. Los clips de revisión manual no se publican. El historial compartido se conserva en estado.json del release cola: no borrarlo. La reserva se guarda antes de publicar; si el resultado es ambiguo o falla el envío, se sacrifica ese turno y clip para evitar duplicaciones. La comparación de transcripciones es aproximada, no garantiza detectar toda repetición; los clips antiguos sin huella tienen protección limitada. El workflow fija 15, 7 y envío a Telegram. Si se instala mediante el ZIP, actualizar el workflow por separado.

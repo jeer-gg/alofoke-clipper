@@ -1,5 +1,8 @@
 """Convierte un pedazo del directo en un Reel 9:16 con título y subtítulos grandes."""
 import subprocess
+import os
+import re
+import tempfile
 
 from . import config
 
@@ -74,6 +77,59 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(cab + "\n".join(eventos) + "\n")
 
 
+
+def _congelamiento_inicial(video):
+    """Devuelve el final de un congelamiento inicial, o 0 si no lo hay.
+
+    Examina el centro del video, sin título ni subtítulos. Si no vuelve el
+    movimiento dentro de 8 segundos, el clip se considera defectuoso.
+    """
+    r = subprocess.run([
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "info",
+        "-i", video, "-t", "8", "-an",
+        "-vf", "crop=iw*0.8:ih*0.25,scale=320:-2,freezedetect=n=-50dB:d=0.65",
+        "-f", "null", "-"
+    ], capture_output=True, text=True, timeout=60, check=True)
+    eventos = re.findall(r"lavfi\.freezedetect\.freeze_(start|end):\s*([0-9.eE+-]+)", r.stderr)
+    for i, (tipo, valor) in enumerate(eventos):
+        if tipo != "start":
+            continue
+        if float(valor) > 0.35:
+            return 0.0
+        for tipo2, valor2 in eventos[i+1:]:
+            if tipo2 == "end":
+                return float(valor2)
+        raise RuntimeError("imagen congelada al inicio sin recuperación en 8 s")
+    return 0.0
+
+
+def corregir_inicio(video, minimo=1.0):
+    """Recorta audio, imagen y subtítulos incrustados juntos; verifica el resultado."""
+    corte = _congelamiento_inicial(video)
+    if not corte:
+        return 0.0
+    if duracion(video) - corte < minimo:
+        raise RuntimeError("eliminar el congelamiento dejaría un clip demasiado corto")
+    fd, temporal = tempfile.mkstemp(suffix=".mp4", dir=os.path.dirname(os.path.abspath(video)))
+    os.close(fd)
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-i", video, "-ss", f"{corte:.6f}",
+            "-map", "0:v:0", "-map", "0:a:0?",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart", temporal
+        ], check=True, timeout=180)
+        if duracion(temporal) < minimo or _congelamiento_inicial(temporal):
+            raise RuntimeError("el clip sigue defectuoso después de corregir el inicio")
+        os.replace(temporal, video)
+        print(f"[editar] congelamiento inicial eliminado: {corte:.2f} s")
+        return corte
+    finally:
+        if os.path.exists(temporal):
+            os.remove(temporal)
+
 def editar(video, clip, segmentos, salida, ancho_fuente=1280, alto_fuente=720):
     alto_video = int(round(ANCHO / (ancho_fuente * config.ZOOM / alto_fuente) / 2) * 2)
     ass = salida.replace(".mp4", ".ass")
@@ -86,13 +142,19 @@ def editar(video, clip, segmentos, salida, ancho_fuente=1280, alto_fuente=720):
         f"[fondo][frente]overlay=(W-w)/2:(H-h)/2,ass={ass},fps=30,format=yuv420p[v]"
     )
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-           "-ss", f"{clip['inicio']:.2f}", "-t", f"{clip['fin'] - clip['inicio']:.2f}", "-i", video,
+           "-fflags", "+genpts", "-ss", f"{clip['inicio']:.2f}", "-accurate_seek", "-i", video,
            "-filter_complex", filtro, "-map", "[v]", "-map", "0:a?",
            "-af", "dynaudnorm=f=150:g=15:p=0.9:m=10,loudnorm=I=-14:TP=-1.5:LRA=11",
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
            "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
            "-t", f"{clip['fin'] - clip['inicio']:.2f}", "-movflags", "+faststart", salida]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+        corregir_inicio(salida, minimo=config.CLIP_MIN_SEG * 0.7)
+    except Exception:
+        if os.path.exists(salida):
+            os.remove(salida)
+        raise
     return salida
 
 

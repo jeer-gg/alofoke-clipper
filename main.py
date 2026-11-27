@@ -6,6 +6,8 @@ Mientras graba, procesa cada pedazo terminado:
 Al final del turno, los pedazos que no alcanzó a procesar se le entregan al siguiente turno,
 que ya está en fila. Así no hay huecos en la grabación."""
 import glob
+import hashlib
+import uuid
 import json
 import os
 import shutil
@@ -14,7 +16,7 @@ import time
 import traceback
 from datetime import datetime
 
-from clipper import analisis, captura, cola, config, editar, elegir, publicar
+from clipper import analisis, captura, cola, config, editar, elegir, publicar, reparto
 
 TRABAJO = "trabajo"
 SEG_DIR = os.path.join(TRABAJO, "segmentos")
@@ -90,7 +92,13 @@ class Bot:
             for i, clip in enumerate(elegidos):
                 if not clip.get("revision_manual") and clip["puntaje"] < config.PUNTAJE_MINIMO:
                     continue
-                nombre = f"clip-{sello}-{i}"
+                nombre = f"clip-{sello}-{uuid.uuid4().hex[:10]}"
+                clip.update({"nombre": nombre, "huella": reparto.huella(" ".join(
+                    w["texto"] for seg in segmentos for w in seg.get("palabras", [])
+                    if clip["inicio"] <= w["inicio"] < clip["fin"]))})
+                if not clip.get("revision_manual") and any(reparto.duplicado(clip, c)
+                        for c in self.cola + self.estado.get("historial_clips", [])):
+                    continue
                 salida = os.path.join(TRABAJO, nombre + ".mp4")
                 try:
                     editar.editar(video, clip, segmentos, salida, ancho, alto)
@@ -104,6 +112,8 @@ class Bot:
                         publicar.telegram("[REVISIÓN MANUAL] " + descripcion(clip), salida)
                     os.remove(salida)
                     continue
+                with open(salida, "rb") as f:
+                    clip["sha256"] = hashlib.file_digest(f, "sha256").hexdigest()
                 clip.update({"nombre": nombre, "creado": sello})
                 meta = os.path.join(TRABAJO, nombre + ".json")
                 with open(meta, "w") as f:
@@ -132,10 +142,13 @@ class Bot:
     def podar_cola(self):
         """Bota lo viejo y deja solo los MAX_COLA mejores."""
         limite = time.time() - config.MAX_EDAD_HORAS * 3600
-        vivos = [c for c in self.cola if c["creado"] >= limite]
+        historial = self.estado.get("historial_clips", [])
+        vivos = [c for c in self.cola if c["creado"] >= limite
+                 and c["puntaje"] >= config.PUNTAJE_MINIMO and not c.get("revision_manual")
+                 and not any(reparto.duplicado(c, h) for h in historial)]
         vivos.sort(key=lambda c: (-c["puntaje"], -c["creado"]))
         quedan, sobran = vivos[: config.MAX_COLA], vivos[config.MAX_COLA:]
-        sobran += [c for c in self.cola if c["creado"] < limite]
+        sobran += [c for c in self.cola if c not in vivos]
         for c in sobran:
             cola.borrar(c["nombre"] + ".mp4", c["nombre"] + ".json")
             if c.get("ruta") and os.path.exists(c["ruta"]):
@@ -147,13 +160,15 @@ class Bot:
         return self.estado.setdefault("paginas", {}).setdefault(pid, {"publicaciones": []})
 
     def puede_publicar(self, pagina):
-        """Cada página tiene su propio límite de 30 Reels en 24 h."""
+        """Máximo de 15 en 24 h y un clip por ventana local."""
         t = time.time()
         p = self._pagina(pagina["id"])
         p["publicaciones"] = [x for x in p["publicaciones"] if t - x < 86400]
         if t < p.get("reintentar_desde", 0):
             return False
-        if not (config.HORA_INICIO <= ahora().hour < config.HORA_FIN):
+        indice = next((i for i, pg in enumerate(config.FB_PAGINAS) if pg["id"] == pagina["id"]), -1)
+        slot = reparto.turno(ahora(), indice) if indice in (0, 1) else None
+        if not slot or p.get("ultimo_turno") == slot:
             return False
         if len(p["publicaciones"]) >= config.MAX_POR_DIA:
             return False
@@ -186,10 +201,31 @@ class Bot:
             nombre = pagina["nombre"]
             try:
                 if config.MODO_PRUEBA:
-                    vid, estado_fb = "prueba", "ready"
-                else:
-                    vid = publicar.reel(ruta, descripcion(clip), pagina["id"], pagina["token"])
-                    estado_fb = publicar.estado_reel(vid, pagina["token"])
+                    print("[main] prueba: no se publica ni consume el turno")
+                    return
+                # Reserva persistente antes de enviar: ante un resultado ambiguo no duplicar.
+                indice = next(i for i, pg in enumerate(config.FB_PAGINAS) if pg["id"] == pagina["id"])
+                slot = reparto.turno(ahora(), indice)
+                if not slot or not self.puede_publicar(pagina):
+                    continue
+                historial = self.estado.setdefault("historial_clips", [])
+                reserva = {k: clip[k] for k in ("nombre", "huella", "sha256") if k in clip}
+                reserva.update({"pagina": pagina["id"], "fecha": time.time()})
+                historial.append(reserva)
+                datos["ultimo_turno"] = slot
+                datos["publicaciones"].append(time.time())
+                try:
+                    cola.guardar_estado(self.estado, COLA_DIR)
+                except Exception:
+                    historial.pop()
+                    datos["publicaciones"].pop()
+                    datos.pop("ultimo_turno", None)
+                    print("[main] sin persistencia de reserva; no publico")
+                    return
+                vid = publicar.reel(ruta, descripcion(clip), pagina["id"], pagina["token"])
+                reserva["video_id"] = vid
+                self._guardar_estado()
+                estado_fb = publicar.estado_reel(vid, pagina["token"])
             except publicar.ErrorFacebook as e:
                 print(f"[main] error al publicar en {nombre}:", e)
                 if e.token_malo:
@@ -212,9 +248,9 @@ class Bot:
             except Exception as e:  # red caída, etc.
                 print(f"[main] fallo de red publicando en {nombre}:", e)
                 datos["reintentar_desde"] = time.time() + 10 * 60
+                self._guardar_estado()
                 continue
 
-            datos["publicaciones"].append(time.time())
             self.cola.pop(0)
             cola.borrar(clip["nombre"] + ".mp4", clip["nombre"] + ".json")
             self._guardar_estado()
@@ -223,7 +259,7 @@ class Bot:
                 publicar.telegram(f"Bot Alofoke: Facebook rechazó el Reel '{clip['titulo']}' en {nombre} "
                                   f"al procesarlo (video {vid}). Sigo con el siguiente.",
                                   clave=f"rechazo_{pagina['id']}", cada_min=30)
-            aviso = (f"Publicado en {nombre} ({n}/{config.MAX_POR_DIA} en 24 h, "
+            aviso = (f"Facebook ({estado_fb}) en {nombre} ({n}/{config.MAX_POR_DIA} en 24 h, "
                      f"puntaje {clip['puntaje']}): {clip['titulo']} [{vid}]")
             print("[main]", aviso)
             publicar.telegram(aviso, None if config.ENVIAR_TODOS_TELEGRAM else ruta)

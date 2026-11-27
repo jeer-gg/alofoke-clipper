@@ -34,20 +34,20 @@ WHISPER_MODELO = _str("WHISPER_MODELO", "small")  # tiny | base | small
 CLIP_MIN_SEG = _int("CLIP_MIN_SEG", 25)
 CLIP_MAX_SEG = _int("CLIP_MAX_SEG", 80)
 CLIPS_POR_SEGMENTO = _int("CLIPS_POR_SEGMENTO", 15)  # máximo de clips por cada pedazo
-PUNTAJE_MINIMO = _int("PUNTAJE_MINIMO", 5)         # 1-10; debajo de esto no se publica
+PUNTAJE_MINIMO = max(7, _int("PUNTAJE_MINIMO", 7))         # 1-10; debajo de esto no se publica
 ZOOM = float(_str("ZOOM", "0.75"))            # fracción del ancho original que se conserva
 
 # --- Publicación ---
 ZONA = ZoneInfo("America/Santo_Domingo")
-MAX_POR_DIA = _int("MAX_POR_DIA", 30)              # por página: Meta permite 30 Reels por API cada 24 h
+MAX_POR_DIA = min(15, max(0, _int("MAX_POR_DIA", 15)))              # por página: Meta permite 30 Reels por API cada 24 h
 HORA_INICIO = _int("HORA_INICIO", 7)               # publica desde las 7 a.m.
-HORA_FIN = _int("HORA_FIN", 24)                    # hasta medianoche
-MIN_ENTRE_POSTS = _int("MIN_ENTRE_POSTS", 25)      # minutos mínimos entre Reels
+HORA_FIN = _int("HORA_FIN", 23)                    # hasta medianoche
+MIN_ENTRE_POSTS = _int("MIN_ENTRE_POSTS", 30)      # minutos mínimos entre Reels
 MAX_COLA = _int("MAX_COLA", 80)                    # clips guardados como máximo
-MAX_EDAD_HORAS = _int("MAX_EDAD_HORAS", 10)        # un clip más viejo ya no es noticia
+MAX_EDAD_HORAS = min(6, _int("MAX_EDAD_HORAS", 6))        # un clip más viejo ya no es noticia
 HASHTAGS = _str("HASHTAGS", "#LaCasaDeAlofoke3 #Alofoke #LaCasaDeAlofoke #RepublicaDominicana")
 
-ENVIAR_TODOS_TELEGRAM = _str("ENVIAR_TODOS_TELEGRAM", "0") == "1"  # 1 = te manda TODOS los clips (para TikTok/IG a mano)
+ENVIAR_TODOS_TELEGRAM = _str("ENVIAR_TODOS_TELEGRAM", "1") == "1"  # 1 = te manda TODOS los clips (para TikTok/IG a mano)
 
 # --- Quién elige los momentos (en orden; si uno falla o se agota, pasa al siguiente).
 # Por ahora solo Gemini gratis y Codex (ChatGPT Plus). Para sumar Claude cuando se renueve
