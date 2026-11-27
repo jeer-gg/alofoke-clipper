@@ -92,4 +92,4 @@ jobs:
           ELEGIDORES: ${{ vars.ELEGIDORES }}
           SEGMENTO_SEG: ${{ vars.SEGMENTO_SEG }}
           CLIPS_POR_SEGMENTO: ${{ vars.CLIPS_POR_SEGMENTO }}
-        run: python yt-dlp
+        run: python main.py
