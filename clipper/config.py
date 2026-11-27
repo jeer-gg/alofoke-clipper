@@ -1,339 +1,100 @@
 """Configuración del bot. Todo se puede cambiar con variables de entorno
 (en GitHub: Settings > Secrets and variables > Actions > Variables)."""
-
 import os
-import json
-import math
 from zoneinfo import ZoneInfo
 
 
-def _limpiar(valor):
-    """Elimina espacios y caracteres invisibles."""
-    if valor is None:
-        return ""
-
-    valor = str(valor)
-
-    for caracter in (
-        "\u200b",
-        "\u200c",
-        "\u200d",
-        "\ufeff",
-        "\u2060",
-    ):
-        valor = valor.replace(caracter, "")
-
-    return valor.strip()
-
-
 def _str(nombre, defecto):
-    valor = _limpiar(os.getenv(nombre))
-    return valor or defecto
+    valor = os.getenv(nombre, "")
+    for c in ("\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"):
+        valor = valor.replace(c, "")
+    return valor.strip() or defecto
 
 
 def _int(nombre, defecto):
     try:
-        return int(_str(nombre, str(defecto)))
-    except (ValueError, TypeError):
-        print(f"[config] {nombre} inválido; usando {defecto}")
+        return int(os.getenv(nombre, defecto))
+    except ValueError:
         return int(defecto)
 
 
-def _float(nombre, defecto):
-    try:
-        valor = float(_str(nombre, str(defecto)))
-
-        if not math.isfinite(valor):
-            return float(defecto)
-
-        return valor
-
-    except (ValueError, TypeError):
-        return float(defecto)
-
-
-def _bool(nombre, defecto="0"):
-    valor = _str(nombre, defecto).lower()
-    return valor in ("1", "true", "yes", "si", "sí", "on")
-
-
 # --- Fuente ---
+# URL del directo. "/live" siempre apunta a la transmisión activa del canal.
+CANAL_LIVE_URL = _str("CANAL_LIVE_URL", "https://www.youtube.com/@AlofokeRadioShow/live")
+SEGMENTO_SEG = _int("SEGMENTO_SEG", 600)          # fragmentos de 10 minutos
+DURACION_TRABAJO = _int("DURACION_TRABAJO", 14400)  # cada turno graba 4 horas y le pasa el relevo al siguiente
+YT_COOKIES = os.getenv("YT_COOKIES", "")           # contenido de cookies.txt si YouTube bloquea
 
-CANAL_LIVE_URL = _str(
-    "CANAL_LIVE_URL",
-    "https://www.youtube.com/@AlofokeRadioShow/live"
-)
-
-# Fragmentos de 10 minutos.
-SEGMENTO_SEG = max(60, _int("SEGMENTO_SEG", 600))
-
-# Cada turno graba durante 4 horas.
-DURACION_TRABAJO = _int("DURACION_TRABAJO", 14400)
-
-# Conservar el formato original de las cookies.
-YT_COOKIES = os.getenv("YT_COOKIES", "")
-
-# Fuente alternativa desde Google Drive.
-DRIVE_CARPETA = _str("DRIVE_CARPETA", "")
+# Carpeta pública de Google Drive con tus grabaciones de pantalla del directo.
+# Si está puesta, el bot usa esos videos en lugar de grabar YouTube.
+DRIVE_CARPETA = os.getenv("DRIVE_CARPETA", "").strip()
 FUENTE = "drive" if DRIVE_CARPETA else "youtube"
 
-
 # --- Transcripción ---
-
-MODELOS_WHISPER_VALIDOS = {
-    "tiny.en",
-    "tiny",
-    "base.en",
-    "base",
-    "small.en",
-    "small",
-    "medium.en",
-    "medium",
-    "large-v1",
-    "large-v2",
-    "large-v3",
-    "large",
-    "distil-large-v2",
-    "distil-medium.en",
-    "distil-small.en",
-    "distil-large-v3",
-    "distil-large-v3.5",
-    "large-v3-turbo",
-    "turbo",
-}
-
-WHISPER_MODELO = _str(
-    "WHISPER_MODELO",
-    "small"
-).lower()
-
-if WHISPER_MODELO not in MODELOS_WHISPER_VALIDOS:
-    print("[config] Modelo Whisper inválido; usando small")
-    WHISPER_MODELO = "small"
-
-print(f"[config] Modelo Whisper: {WHISPER_MODELO}")
-
+WHISPER_MODELO = _str("WHISPER_MODELO", "small")  # tiny | base | small
 
 # --- Clips ---
-
-CLIP_MIN_SEG = max(1, _int("CLIP_MIN_SEG", 25))
-
-CLIP_MAX_SEG = max(
-    CLIP_MIN_SEG,
-    _int("CLIP_MAX_SEG", 80)
-)
-
-CLIPS_POR_SEGMENTO = max(
-    1,
-    _int("CLIPS_POR_SEGMENTO", 5)
-)
-
-# Nunca permitir una puntuación inferior a 7.
-PUNTAJE_MINIMO = min(
-    10,
-    max(7, _int("PUNTAJE_MINIMO", 7))
-)
-
-ZOOM = min(
-    1.0,
-    max(0.1, _float("ZOOM", 0.75))
-)
-
+CLIP_MIN_SEG = _int("CLIP_MIN_SEG", 25)
+CLIP_MAX_SEG = _int("CLIP_MAX_SEG", 80)
+CLIPS_POR_SEGMENTO = _int("CLIPS_POR_SEGMENTO", 5)  # máximo de clips por cada pedazo
+PUNTAJE_MINIMO = max(7, _int("PUNTAJE_MINIMO", 7))         # 1-10; debajo de esto no se publica
+ZOOM = float(_str("ZOOM", "0.75"))            # fracción del ancho original que se conserva
 
 # --- Publicación ---
-
 ZONA = ZoneInfo("America/Santo_Domingo")
+MAX_POR_DIA = min(17, max(0, _int("MAX_POR_DIA", 17)))              # por página: Meta permite 30 Reels por API cada 24 h
+HORA_INICIO = _int("HORA_INICIO", 7)               # publica desde las 7 a.m.
+HORA_FIN = _int("HORA_FIN", 23)                    # hasta medianoche
+MIN_ENTRE_POSTS = _int("MIN_ENTRE_POSTS", 30)      # minutos mínimos entre Reels
+MAX_COLA = _int("MAX_COLA", 150)                    # clips guardados como máximo
+MAX_EDAD_HORAS = min(24, max(1, _int("MAX_EDAD_HORAS", 24)))        # un clip más viejo ya no es noticia
+HASHTAGS = _str("HASHTAGS", "#LaCasaDeAlofoke3 #Alofoke #LaCasaDeAlofoke #RepublicaDominicana")
 
-# Máximo de 17 Reels diarios por página.
-MAX_POR_DIA = min(
-    17,
-    max(0, _int("MAX_POR_DIA", 17))
-)
+ENVIAR_TODOS_TELEGRAM = _str("ENVIAR_TODOS_TELEGRAM", "1") == "1"  # 1 = te manda TODOS los clips (para TikTok/IG a mano)
 
-HORA_INICIO = min(
-    23,
-    max(0, _int("HORA_INICIO", 7))
-)
+# --- Quién elige los momentos (en orden; si uno falla o se agota, pasa al siguiente).
+# Por ahora solo Gemini gratis y Codex (ChatGPT Plus). Para sumar Claude cuando se renueve
+# su límite, pon la variable ELEGIDORES = gemini,codex,claude
+ELEGIDORES = [x.strip() for x in _str("ELEGIDORES", "gemini,codex").split(",") if x.strip()]
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODELO = _str("GEMINI_MODELO", "gemini-3.5-flash-lite")
+GEMINI_ALTERNATIVOS = [x.strip() for x in _str("GEMINI_ALTERNATIVOS", "gemini-3.8-flash").split(",") if x.strip()]
 
-HORA_FIN = min(
-    23,
-    max(HORA_INICIO, _int("HORA_FIN", 23))
-)
-
-MIN_ENTRE_POSTS = max(
-    1,
-    _int("MIN_ENTRE_POSTS", 30)
-)
-
-MAX_COLA = max(
-    1,
-    _int("MAX_COLA", 80)
-)
-
-MAX_EDAD_HORAS = min(
-    6,
-    max(1, _int("MAX_EDAD_HORAS", 6))
-)
-
-HASHTAGS = _str(
-    "HASHTAGS",
-    "#LaCasaDeAlofoke3 #Alofoke "
-    "#LaCasaDeAlofoke #RepublicaDominicana"
-)
-
-ENVIAR_TODOS_TELEGRAM = _bool(
-    "ENVIAR_TODOS_TELEGRAM",
-    "1"
-)
-
-
-# --- Inteligencia artificial ---
-
-ELEGIDORES = [
-    _limpiar(x).lower()
-    for x in _str(
-        "ELEGIDORES",
-        "gemini,codex"
-    ).split(",")
-    if _limpiar(x)
-]
-
-GEMINI_API_KEY = _str("GEMINI_API_KEY", "")
-
-GEMINI_MODELO = _str(
-    "GEMINI_MODELO",
-    "gemini-3.5-flash-lite"
-)
-
-GEMINI_ALTERNATIVOS = [
-    _limpiar(x)
-    for x in _str(
-        "GEMINI_ALTERNATIVOS",
-        "gemini-3.8-flash"
-    ).split(",")
-    if _limpiar(x)
-]
-
-
-# --- Credenciales de Facebook ---
-
+# --- Credenciales ---
+# Páginas donde publica. Secreto FB_PAGINAS en formato JSON, por ejemplo:
+# [{"nombre": "Pagina 1", "id": "123", "token": "EAA..."}, {"nombre": "Pagina 2", "id": "456", "token": "EAA..."}]
+# Si no existe, usa FB_PAGE_ID y FB_PAGE_TOKEN (una sola página).
 def _paginas():
-
+    import json
     crudo = os.getenv("FB_PAGINAS", "").strip()
-
-    # Corregir comillas curvas del teclado del iPhone.
-    for curva in (
-        "\u201c",
-        "\u201d",
-        "\u201e",
-        "\u2033",
-    ):
+    # El teclado del iPhone cambia " por comillas curvas; las arreglamos.
+    for curva in ("\u201c", "\u201d", "\u201e", "\u2033"):
         crudo = crudo.replace(curva, '"')
-
     if crudo:
-
         try:
-            datos = json.loads(crudo)
-
-            if not isinstance(datos, list):
-                raise ValueError("Se esperaba una lista")
-
-            paginas = []
-
-            for p in datos:
-
-                if not isinstance(p, dict):
-                    continue
-
-                pid = _limpiar(p.get("id"))
-                tok = _limpiar(p.get("token"))
-                nombre = _limpiar(p.get("nombre"))
-
-                if pid and tok:
-                    paginas.append({
-                        "nombre": nombre or "Página",
-                        "id": pid,
-                        "token": tok,
-                    })
-
-            return paginas
-
-        except (ValueError, TypeError):
+            return [p for p in json.loads(crudo) if p.get("id") and p.get("token")]
+        except ValueError:
             print("[config] FB_PAGINAS no es un JSON válido")
-
-    pid = _str("FB_PAGE_ID", "")
-    tok = _str("FB_PAGE_TOKEN", "")
-
-    return [
-        {
-            "nombre": "Página",
-            "id": pid,
-            "token": tok
-        }
-    ] if pid and tok else []
+    pid, tok = os.getenv("FB_PAGE_ID", ""), os.getenv("FB_PAGE_TOKEN", "")
+    return [{"nombre": "Página", "id": pid, "token": tok}] if pid and tok else []
 
 
 FB_PAGINAS = _paginas()
+# IDs únicos; conservar el orden del secreto para asignar los horarios.
+FB_PAGINAS = list({str(p["id"]).strip(): p for p in reversed(FB_PAGINAS)}.values())[::-1][:3]
 
 
-# Ocultar los tokens individuales en GitHub Actions.
-
+# El repositorio es público y sus registros también: GitHub oculta cada token individual.
 if os.getenv("GITHUB_ACTIONS"):
-
     for _p in FB_PAGINAS:
         print(f"::add-mask::{_p['token']}")
+GRAPH_VERSION = _str("GRAPH_VERSION", "v21.0")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+REPO = os.getenv("GITHUB_REPOSITORY", "")
+MODO_PRUEBA = _str("MODO_PRUEBA", "0") == "1"  # 1 = no publica, solo manda por Telegram
 
+# Subtítulos discretos opcionales (0 = estilo limpio).
+SUBTITULOS = _str("SUBTITULOS", "0") == "1"
 
-GRAPH_VERSION = _str(
-    "GRAPH_VERSION",
-    "v21.0"
-)
-
-TELEGRAM_TOKEN = _str(
-    "TELEGRAM_TOKEN",
-    ""
-)
-
-TELEGRAM_CHAT_ID = _str(
-    "TELEGRAM_CHAT_ID",
-    ""
-)
-
-REPO = _str(
-    "GITHUB_REPOSITORY",
-    ""
-)
-
-MODO_PRUEBA = _bool(
-    "MODO_PRUEBA",
-    "0"
-)
-
-
-# --- Edición visual ---
-
-# 0 = estilo limpio.
-# 1 = subtítulos discretos.
-
-SUBTITULOS = _bool(
-    "SUBTITULOS",
-    "0"
-)
-
-
-# --- Diagnóstico inicial seguro ---
-
-print("[config] Configuración cargada correctamente")
-print(f"[config] Fuente: {FUENTE}")
-print(f"[config] Segmentos: {SEGMENTO_SEG} segundos")
-print(f"[config] Whisper: {WHISPER_MODELO}")
-print(f"[config] Puntuación mínima: {PUNTAJE_MINIMO}")
-print(f"[config] Clips por segmento: {CLIPS_POR_SEGMENTO}")
-print(f"[config] Máximo diario por página: {MAX_POR_DIA}")
-print(f"[config] Páginas configuradas: {len(FB_PAGINAS)}")
-print(f"[config] Modo prueba: {MODO_PRUEBA}")
-print(f"[config] Elegidores: {', '.join(ELEGIDORES)}")
-print(f"[config] Modelo Gemini: {GEMINI_MODELO}")
-
-for _pagina in FB_PAGINAS:
-    print(f"[config] Página configurada: {_pagina['nombre']}")
+print(f"[config] Whisper: {WHISPER_MODELO}; paginas: {len(FB_PAGINAS)}; maximo por pagina: {MAX_POR_DIA}; cola: {MAX_COLA}; edad: {MAX_EDAD_HORAS}h")

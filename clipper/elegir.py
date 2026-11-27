@@ -42,11 +42,12 @@ tiene que estar completo dentro de este pedazo.
 - Usa marcas temporales dentro de 00:00 a {fin_real}; no redondees más allá del final. Revisa duración antes de responder.
 - "titulo": gancho corto en MAYÚSCULAS (máx. 8 palabras), estilo farándula dominicana, sin emojis, \
 sin inventar cosas que no se dicen. Usa los nombres o apodos que se mencionan.
+- "gancho_blanco": contexto concreto, máximo 5 palabras. "gancho_amarillo": pregunta o frase de curiosidad, máximo 5 palabras. Ambos fieles a la transcripción; no inventes citas, hechos ni presentes acusaciones como hechos verificados.
 - "descripcion": 1 o 2 frases que den contexto y una pregunta para que la gente comente. Sin emojis.
 - "puntaje": 1 a 10, qué tan viral crees que será.
 
 Responde SOLO con JSON válido, sin texto extra:
-{{"clips": [{{"inicio": "mm:ss", "fin": "mm:ss", "titulo": "...", "descripcion": "...", "puntaje": 8}}]}}
+{{"clips": [{{"inicio": "mm:ss", "fin": "mm:ss", "titulo": "...", "descripcion": "...", "gancho_blanco": "...", "gancho_amarillo": "...", "puntaje": 8}}]}}
 
 PICOS DE VOLUMEN (pista extra, no decisiva): {picos}
 
@@ -102,7 +103,8 @@ def parsear(texto, duracion_total):
             print(f"[elegir] candidato {i} descartado: {motivo}")
             continue
         clips.append({"inicio": ini, "fin": fin, "titulo": titulo.strip()[:80],
-                      "descripcion": descripcion.strip()[:400], "puntaje": puntaje})
+                      "descripcion": descripcion.strip()[:400], "puntaje": puntaje,
+                      **{k: c[k].strip()[:80] for k in ("gancho_blanco", "gancho_amarillo") if isinstance(c.get(k), str) and c[k].strip()}})
     if not candidatos:
         print("[elegir] la IA devolvio una lista vacia")
     elif not clips:

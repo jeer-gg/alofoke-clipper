@@ -44,7 +44,7 @@ def crear_ass(clip, segmentos, ruta, alto_video):
     cab = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {ANCHO}
-PlayResY: {ALTO}
+PlayResY: {alto_video}
 WrapStyle: 0
 
 [V4+ Styles]
@@ -56,7 +56,20 @@ Style: Sub,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,1
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     eventos = []
-    y_subs = 850
+    y_subs = int(alto_video*.78)
+    blanco = str(clip.get("gancho_blanco") or clip.get("titulo") or "").upper()
+    amarillo = str(clip.get("gancho_amarillo") or "¿QUÉ PASÓ DESPUÉS?").upper()
+    def linea(texto):
+        return _limpio(" ".join(texto.split()[:8]))[:80]
+    for i, (texto, color) in enumerate(((blanco, "FFFFFF"), (amarillo, "00FFFF"))):
+        texto = linea(texto)
+        if texto:
+            tam = min(68, max(12, int(930 / max(1,len(texto)) / .72)))
+            y = int(alto_video*.085) + i*76
+            eventos.append(f"Dialogue: 1,0:00:00.00,{_t(dur)},Titulo,,0,0,0,,"
+                           + r"{\an8\pos(" + f"540,{y}" + r")\fs" + str(tam) + r"\1c&H" + color + r"&}" + texto)
+    if not config.SUBTITULOS:
+        segmentos = []
 
     palabras = [w for s in segmentos for w in s["palabras"] if w["fin"] > ini and w["inicio"] < fin]
     grupo = []
@@ -82,7 +95,7 @@ def _congelamiento_inicial(video, bruto=False):
     """Detecta inmovilidad inicial en la imagen, no en los textos animados."""
     import numpy as np
     # En el Reel se analiza toda la franja central, sin título ni subtítulos.
-    region = "" if bruto else "crop=iw:ih*0.70,"
+    region = "" if bruto else "crop=iw:ih*0.55:0:ih*0.30,"
     r = subprocess.run([
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
         "-i", video, "-t", "12", "-an",
@@ -171,9 +184,9 @@ def editar(video, clip, segmentos, salida, ancho_fuente=1280, alto_fuente=720):
             visual = os.path.join(tmp, "visual.mp4")
             encuadre.renderizar(limpio, visual)
             filtro = "setsar=1"
-            if config.SUBTITULOS:
-                crear_ass(ajustado, segmentos, ass, alto_video)
-                filtro += ",ass=" + ass
+            alto_video = tamano_video(visual)[1]
+            crear_ass(ajustado, segmentos, ass, alto_video)
+            filtro += ",ass=" + ass
             subprocess.run([
                 "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
                 "-i", visual, "-i", limpio, "-map", "0:v:0", "-map", "1:a:0?",

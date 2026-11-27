@@ -16,7 +16,7 @@ import time
 import traceback
 from datetime import datetime
 
-from clipper import analisis, captura, cola, config, editar, elegir, publicar, reparto
+from clipper import analisis, captura, cola, config, editar, elegir, publicar, reparto, aprendizaje
 
 TRABAJO = "trabajo"
 SEG_DIR = os.path.join(TRABAJO, "segmentos")
@@ -128,7 +128,9 @@ class Bot:
                 salida = os.path.join(TRABAJO, nombre + ".mp4")
                 try:
                     editar.editar(video, clip, segmentos, salida, ancho, alto)
-                    if editar.duracion(salida) < config.CLIP_MIN_SEG * 0.7:
+                    clip["duracion_real"] = editar.duracion(salida)
+                    clip["formato"] = "vertical" if editar.tamano_video(salida) == (1080, 1920) else "cuadrado"
+                    if clip["duracion_real"] < config.CLIP_MIN_SEG * 0.7:
                         raise RuntimeError("el clip salió demasiado corto")
                 except Exception as e:
                     print(f"[main] no se pudo editar {nombre}: {e}")
@@ -189,7 +191,7 @@ class Bot:
         if t < p.get("reintentar_desde", 0):
             return False
         indice = next((i for i, pg in enumerate(config.FB_PAGINAS) if pg["id"] == pagina["id"]), -1)
-        slot = reparto.turno(ahora(), indice) if indice in (0, 1) else None
+        slot = reparto.turno(ahora(), indice, len(config.FB_PAGINAS))
         if not slot or p.get("ultimo_turno") == slot:
             return False
         if len(p["publicaciones"]) >= config.MAX_POR_DIA:
@@ -213,6 +215,8 @@ class Bot:
             self.podar_cola()
             if not self.cola:
                 return
+            ajustes, _ = aprendizaje.perfil(self.estado, pagina["id"])
+            self.cola.sort(key=lambda c: (-aprendizaje.prioridad(c, ajustes), -c["creado"]))
             clip = self.cola[0]
             ruta = clip.get("ruta") if clip.get("ruta") and os.path.exists(clip["ruta"]) else \
                 cola.bajar_video(clip["nombre"] + ".mp4", COLA_DIR)
@@ -220,7 +224,7 @@ class Bot:
                 self.cola.pop(0)
                 continue
             try:
-                if editar.tamano_video(ruta) != (1080, 1080) or editar.duracion(ruta) < config.CLIP_MIN_SEG * 0.7 or editar._congelamiento_inicial(ruta):
+                if editar.tamano_video(ruta) not in ((1080, 1080), (1080, 1920)) or editar.duracion(ruta) < config.CLIP_MIN_SEG * 0.7 or editar._congelamiento_inicial(ruta):
                     raise RuntimeError("inicio congelado o clip corto en cola")
             except Exception as e:
                 print(f"[main] descarto clip de cola no validado: {clip['nombre']}: {e}")
@@ -237,12 +241,13 @@ class Bot:
                     return
                 # Reserva persistente antes de enviar: ante un resultado ambiguo no duplicar.
                 indice = next(i for i, pg in enumerate(config.FB_PAGINAS) if pg["id"] == pagina["id"])
-                slot = reparto.turno(ahora(), indice)
+                slot = reparto.turno(ahora(), indice, len(config.FB_PAGINAS))
                 if not slot or not self.puede_publicar(pagina):
                     continue
                 historial = self.estado.setdefault("historial_clips", [])
                 reserva = {k: clip[k] for k in ("nombre", "huella", "sha256") if k in clip}
                 reserva.update({"pagina": pagina["id"], "fecha": time.time()})
+                aprendizaje.registrar(self.estado, reserva, clip)
                 historial.append(reserva)
                 datos["ultimo_turno"] = slot
                 datos["publicaciones"].append(time.time())
@@ -262,6 +267,7 @@ class Bot:
                 reserva["video_id"] = vid
                 self._guardar_estado()
                 estado_fb = publicar.estado_reel(vid, pagina["token"])
+                reserva["estado_fb"] = estado_fb
             except publicar.ErrorFacebook as e:
                 print(f"[main] error al publicar en {nombre}:", e)
                 if e.token_malo:
@@ -371,6 +377,8 @@ class Bot:
                     time.sleep(20)
 
                 self.intentar_publicar()
+                if not config.MODO_PRUEBA and aprendizaje.actualizar(self.estado, config.FB_PAGINAS):
+                    self._guardar_estado()
             except Exception as e:  # nada debe tumbar el turno
                 print("[main] error inesperado:", e)
                 traceback.print_exc()
@@ -384,7 +392,7 @@ class Bot:
         resumen = (f"Turno terminado: {self.producidos} clips nuevos, {len(self.cola)} en cola, "
                    f"{self.total_24h()} publicados en 24 h entre {len(config.FB_PAGINAS)} páginas.")
         print("[main]", resumen)
-        publicar.telegram("Bot Alofoke: " + resumen)
+        publicar.telegram("Bot Alofoke: " + resumen + "\n" + aprendizaje.resumen(self.estado, config.FB_PAGINAS))
 
 
 if __name__ == "__main__":

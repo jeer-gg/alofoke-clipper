@@ -6,12 +6,16 @@ import unicodedata
 HORAS = tuple(range(7, 24))
 
 
-def turno(fecha, indice):
-    minutos = fecha.hour * 60 + fecha.minute
-    for hora in HORAS:
-        inicio = hora * 60 + 30 * indice
-        if inicio <= minutos < inicio + 30:
-            return f'{fecha.date()}:{inicio}'
+def turno(fecha, indice, total=3):
+    """17 ventanas por página; 20 min para tres, 30 para dos."""
+    if total not in (1, 2, 3) or not 0 <= indice < total:
+        return None
+    if fecha.hour not in HORAS:
+        return None
+    ancho = 60 // total
+    if indice * ancho <= fecha.minute < (indice + 1) * ancho:
+        # Identificador estable por hora incluso si cambia el número de páginas.
+        return f'{fecha.date()}:{fecha.hour * 60 + indice * ancho}'
     return None
 
 

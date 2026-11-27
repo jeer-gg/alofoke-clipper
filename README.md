@@ -142,3 +142,9 @@ Hasta 17 por página (34 entre dos páginas), de 07:00 a 23:00 y 07:30 a 23:30, 
 
 ### Edición cuadrada dinámica
 Los clips nuevos se exportan a 1080×1080, sin fondo borroso ni títulos grandes. OpenCV estima rostros y movimiento localmente, con zoom limitado a 1.25× y transición suave. No identifica hablantes ni reconoce quién está hablando. La marca textual de la página se añade al publicar; Telegram recibe el máster sin marca. `SUBTITULOS=1` activa subtítulos blancos discretos (por defecto apagados). Los clips antiguos no cuadrados de la cola se descartan al intentar publicarlos. No se cambia el selector Gemini ni los turnos de 17 publicaciones por página. El procesamiento local puede aumentar el tiempo de Actions. Revisar encuadre y audio antes de publicar en producción.
+
+## Tres páginas
+Agregar History Time como tercer objeto del secreto FB_PAGINAS. Con tres páginas: ventanas de 20 minutos a las :00, :20 y :40 de cada hora de 07 a 23. Con dos se mantienen :00 y :30. Máximo 17 por página en 24 h, mínimo 7/10. Cola hasta 150 y edad hasta 24 h. No se añaden consultas Gemini. No se garantiza llenar todas las ventanas.
+
+### Ranking de aprendizaje
+El resumen de Telegram muestra los tres Reels con más reproducciones medidas por página. El aprendizaje incorpora formato, duración real, tema, gancho y puntuación; conserva el filtro mínimo de 7 y ajusta únicamente la prioridad de la cola. Las cifras son reproducciones, no espectadores únicos ni retención. No añade consultas de Gemini.
