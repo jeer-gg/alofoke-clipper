@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Descomprimir el zip y subir los archivos
         run: |
           if [ ! -f alofoke-clipper.zip ]; then echo "Falta subir alofoke-clipper.zip"; exit 0; fi
@@ -36,8 +37,10 @@ jobs:
     concurrency:
       group: clipper
       cancel-in-progress: false
+
     runs-on: ubuntu-latest
     timeout-minutes: 300
+
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +54,36 @@ jobs:
 
       - name: Instalar dependencias
         run: pip install -U -r requirements.txt
+
+      - name: Instalar Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Actualizar yt-dlp y EJS
+        run: |
+          python -m pip install -U "yt-dlp[default]"
+
+      - name: Verificar instalaciones
+        run: |
+          python --version
+          deno --version
+          python -m yt_dlp --version
+          python -m pip show yt-dlp-ejs
+          ffmpeg -version
+
+      - name: Diagnosticar yt-dlp
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          CANAL_LIVE_URL: ${{ vars.CANAL_LIVE_URL }}
+        run: |
+          URL="${CANAL_LIVE_URL:-https://www.youtube.com/watch?v=Dxi1CRMQZo}"
+          python -m yt_dlp \
+            --js-runtimes deno \
+            --socket-timeout 30 \
+            --retries 2 \
+            -v -F "$URL"
 
       - name: Instalar Claude Code
         run: npm install -g @anthropic-ai/claude-code
@@ -92,4 +125,5 @@ jobs:
           ELEGIDORES: ${{ vars.ELEGIDORES }}
           SEGMENTO_SEG: ${{ vars.SEGMENTO_SEG }}
           CLIPS_POR_SEGMENTO: ${{ vars.CLIPS_POR_SEGMENTO }}
+          PYTHONUNBUFFERED: "1"
         run: python -u main.py
