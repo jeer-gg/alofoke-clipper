@@ -67,8 +67,11 @@ class Bot:
     def procesar_segmento(self, original):
         if editar.duracion(original) < 60:
             return
-        video, solape = self._unir_con_previa(original)
-        self._guardar_cola_previa(original)
+        if config.FUENTE == "drive":  # cada grabación es independiente: sin solape
+            video, solape = original, 0.0
+        else:
+            video, solape = self._unir_con_previa(original)
+            self._guardar_cola_previa(original)
         dur = editar.duracion(video)
         wav = video.replace(".ts", ".wav")
         wav_voz = video.replace(".ts", "_voz.wav")
@@ -85,7 +88,7 @@ class Bot:
             sello = int(time.time())
             nuevos = 0
             for i, clip in enumerate(elegidos):
-                if clip["puntaje"] < config.PUNTAJE_MINIMO:
+                if not clip.get("revision_manual") and clip["puntaje"] < config.PUNTAJE_MINIMO:
                     continue
                 nombre = f"clip-{sello}-{i}"
                 salida = os.path.join(TRABAJO, nombre + ".mp4")
@@ -95,6 +98,11 @@ class Bot:
                         raise RuntimeError("el clip salió demasiado corto")
                 except Exception as e:
                     print(f"[main] no se pudo editar {nombre}: {e}")
+                    continue
+                if clip.get("revision_manual"):
+                    if config.ENVIAR_TODOS_TELEGRAM or config.MODO_PRUEBA:
+                        publicar.telegram("[REVISIÓN MANUAL] " + descripcion(clip), salida)
+                    os.remove(salida)
                     continue
                 clip.update({"nombre": nombre, "creado": sello})
                 meta = os.path.join(TRABAJO, nombre + ".json")
@@ -235,9 +243,18 @@ class Bot:
         if recibidos:
             print(f"[main] recibí {len(recibidos)} pedazos del turno anterior")
 
-        grabador = captura.GrabadorContinuo(
-            SEG_DIR, fin, avisar=lambda t: publicar.telegram(t, clave="directo_caido", cada_min=60))
+        if config.FUENTE == "drive":
+            from clipper.fuente_drive import FuenteDrive
+            vistos = self.estado.setdefault("drive_vistos", [])
+            grabador = FuenteDrive(SEG_DIR, fin, vistos,
+                                   avisar=lambda t: publicar.telegram(t, clave="drive", cada_min=60))
+            print("[main] fuente: carpeta de Google Drive")
+        else:
+            grabador = captura.GrabadorContinuo(
+                SEG_DIR, fin, avisar=lambda t: publicar.telegram(t, clave="directo_caido", cada_min=60))
+            print("[main] fuente: directo de YouTube")
         grabador.iniciar()
+        completos = getattr(grabador, "archivos_completos", False)
         hechos = set()
         tiempo_proceso = 0.0  # cuánto tardó el último pedazo
         while True:
@@ -245,7 +262,8 @@ class Bot:
                 archivos = sorted(glob.glob(os.path.join(SEG_DIR, "seg_*.ts")))
                 grabando = grabador.vivo()
                 # El último pedazo se sigue grabando; solo se procesan los cerrados.
-                listos = [a for a in (archivos[:-1] if grabando else archivos) if a not in hechos]
+                listos = [a for a in (archivos[:-1] if grabando and not completos else archivos)
+                          if a not in hechos]
 
                 if not grabando:
                     # Se acabó el turno: lo que falte, al siguiente turno.
@@ -276,6 +294,7 @@ class Bot:
                     hechos.add(a)
                     if os.path.exists(a):
                         os.remove(a)
+                    self._guardar_estado()
                 else:
                     time.sleep(20)
 

@@ -1,4 +1,5 @@
 yt-dlp[default]
+gdown
 faster-whisper
 numpy
 requests

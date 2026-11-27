@@ -22,6 +22,16 @@ Para aprovechar el resto de clips:
 ## Cómo graba 24/7 con GitHub gratis
 Cada turno graba 4 horas. Cada 2 horas se lanza uno nuevo, que espera en fila y arranca justo cuando termina el anterior. Las horas que un turno no alcanzó a procesar se las entrega al siguiente, así que no se pierde nada del directo; entre turno y turno solo hay unos minutos de cambio. La cola de clips también pasa de un turno al siguiente.
 
+## Fuente de video: tus grabaciones en Google Drive
+Si creas la variable `DRIVE_CARPETA` con el enlace de una carpeta de Google Drive, el bot deja de grabar YouTube y usa los videos que subas ahí:
+
+1. En la app de Google Drive crea una carpeta (por ejemplo, "Clips Alofoke").
+2. Compártela: **Compartir → Acceso general → Cualquier persona con el enlace (Lector)** y copia el enlace.
+3. En GitHub crea la variable `DRIVE_CARPETA` con ese enlace.
+4. Graba el directo con la grabación de pantalla del iPhone (YouTube a pantalla completa, teléfono de lado, con No molestar activado) y sube cada grabación a la carpeta.
+
+El bot revisa la carpeta cada 3 minutos, procesa cada video nuevo una sola vez y publica los clips como siempre. Borra de vez en cuando las grabaciones viejas: el bot solo lee hasta 50 archivos por carpeta.
+
 ## Instalación
 
 ### 1. Crea el repositorio
@@ -111,3 +121,14 @@ Para arreglarlo:
 - `clipper/editar.py`: el Reel 9:16.
 - `clipper/publicar.py`: API de Reels de Meta y Telegram.
 - `clipper/cola.py`: la cola, guardada en el release `cola`. No lo borres.
+
+
+## Diagnóstico de Gemini (actualización)
+
+- `GEMINI_MODELO`: modelo principal, por defecto `gemini-3.5-flash-lite`.
+- `GEMINI_ALTERNATIVOS`: lista separada por comas, por defecto `gemini-3.8-flash`. Solo se prueba otro modelo ante HTTP 404. Comprueba acceso y tarifas en Google AI Studio antes de habilitar modelos.
+- HTTP 400/401/403: revisar clave, permisos y región; 429: revisar cuota (pausa de cinco minutos dentro del turno); 5xx y errores de red: hasta tres intentos con espera creciente.
+- Una respuesta válida con cero clips no activa el respaldo. Una respuesta bloqueada por seguridad tampoco.
+- El respaldo sin IA queda exclusivamente para revisión manual en Telegram si `ENVIAR_TODOS_TELEGRAM=1` o `MODO_PRUEBA=1`; no entra a la cola de Facebook.
+- El ZIP no instala por sí mismo el workflow: actualizar `.github/workflows/clipper.yml` por separado.
+- Pruebas locales simuladas: `python -m unittest discover -s tests -v`. No verifican una clave real ni la cuota de Google.

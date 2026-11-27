@@ -22,6 +22,11 @@ SEGMENTO_SEG = _int("SEGMENTO_SEG", 3600)          # pedazos de 1 hora = 1 consu
 DURACION_TRABAJO = _int("DURACION_TRABAJO", 14400)  # cada turno graba 4 horas y le pasa el relevo al siguiente
 YT_COOKIES = os.getenv("YT_COOKIES", "")           # contenido de cookies.txt si YouTube bloquea
 
+# Carpeta pública de Google Drive con tus grabaciones de pantalla del directo.
+# Si está puesta, el bot usa esos videos en lugar de grabar YouTube.
+DRIVE_CARPETA = os.getenv("DRIVE_CARPETA", "").strip()
+FUENTE = "drive" if DRIVE_CARPETA else "youtube"
+
 # --- Transcripción ---
 WHISPER_MODELO = _str("WHISPER_MODELO", "small")  # tiny | base | small
 
@@ -49,7 +54,8 @@ ENVIAR_TODOS_TELEGRAM = _str("ENVIAR_TODOS_TELEGRAM", "0") == "1"  # 1 = te mand
 # su límite, pon la variable ELEGIDORES = gemini,codex,claude
 ELEGIDORES = [x.strip() for x in _str("ELEGIDORES", "gemini,codex").split(",") if x.strip()]
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODELO = _str("GEMINI_MODELO", "gemini-2.5-flash")
+GEMINI_MODELO = _str("GEMINI_MODELO", "gemini-3.5-flash-lite")
+GEMINI_ALTERNATIVOS = [x.strip() for x in _str("GEMINI_ALTERNATIVOS", "gemini-3.8-flash").split(",") if x.strip()]
 
 # --- Credenciales ---
 # Páginas donde publica. Secreto FB_PAGINAS en formato JSON, por ejemplo:
