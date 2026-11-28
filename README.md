@@ -151,6 +151,3 @@ El resumen de Telegram muestra los tres Reels con más reproducciones medidas po
 
 ### Cuatro páginas
 Añadir la cuarta al final de FB_PAGINAS. Ventanas de 15 minutos (:00, :15, :30, :45), de 07 a 23. Hasta 17 por página en 24 h; cola 200; edad 24 h. El editor prioriza vertical, conserva cuadrado en escenas amplias persistentes. Sin consultas adicionales a Gemini.
-
-### Memes selectivos
-Por defecto, Gemini recibe hasta 36 fotogramas JPEG por segmento (muestreo regular y cambios visuales), además de la transcripción. Puede proponer memes de gestos o diálogo; solo se usa el gancho meme si su nota es al menos 8/10, con evidencia y marca temporal válida. El mínimo viral y la duración original permanecen intactos. Los demás clips conservan ganchos tradicionales. El aprendizaje registra el estilo por separado. Codex/Claude conservan el respaldo textual original. El muestreo puede omitir reacciones breves; no es análisis continuo. Se requiere autorización sobre la fuente y cumplimiento de las políticas de Meta. Para desactivar, configurar MEMES_SELECTIVOS=0; si se usa el instalador ZIP, actualizar también el workflow para transmitir esta variable. No se modifican los clips existentes en cola.

@@ -17,7 +17,7 @@ def rasgos(clip):
     cat = next((k for k,v in CATEGORIAS.items() if re.search(v,texto)), 'otros')
     dur = clip.get('duracion_real', clip.get('fin',0)-clip.get('inicio',0))
     gancho = clip.get('gancho_blanco','')+' '+clip.get('gancho_amarillo','')
-    return ['estilo:'+clip.get('tipo_gancho','tradicional'), 'tema:'+cat, 'duracion:'+('25-39s' if dur<40 else '40-59s' if dur<60 else '60-80s'), 'gancho:'+('pregunta' if '?' in gancho else 'afirmacion'), 'formato:'+clip.get('formato','desconocido'), 'puntaje:'+str(int(clip.get('puntaje',7)))]
+    return ['tema:'+cat, 'duracion:'+('25-39s' if dur<40 else '40-59s' if dur<60 else '60-80s'), 'gancho:'+('pregunta' if '?' in gancho else 'afirmacion'), 'formato:'+clip.get('formato','desconocido'), 'puntaje:'+str(int(clip.get('puntaje',7)))]
 
 
 def registrar(estado, reserva, clip):

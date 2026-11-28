@@ -105,21 +105,6 @@ def parsear(texto, duracion_total):
         clips.append({"inicio": ini, "fin": fin, "titulo": titulo.strip()[:80],
                       "descripcion": descripcion.strip()[:400], "puntaje": puntaje,
                       **{k: c[k].strip()[:80] for k in ("gancho_blanco", "gancho_amarillo") if isinstance(c.get(k), str) and c[k].strip()}})
-        if config.MEMES_SELECTIVOS:
-            try:
-                pm = float(c.get("puntaje_meme", 0))
-                momento = _a_segundos(c.get("momento_meme", -1))
-                b, a, evidencia = (c.get(k) for k in ("meme_blanco", "meme_amarillo", "evidencia_meme"))
-                if (pm.is_integer() and 8 <= pm <= 10 and ini <= momento < fin
-                    and all(isinstance(x, str) and x.strip() for x in (b,a,evidencia))
-                    and all(len(x.split()) <= 5 and len(x) <= 80 for x in (b,a))):
-                    clips[-1].update(tipo_gancho="meme", puntaje_meme=int(pm),
-                        gancho_blanco=b.strip(), gancho_amarillo=a.strip(),
-                        evidencia_meme=evidencia[:240], momento_meme=momento)
-                    print(f"[elegir] meme selectivo {int(pm)}/10")
-            except (ValueError, TypeError, OverflowError):
-                pass
-        clips[-1].setdefault("tipo_gancho", "tradicional")
     if not candidatos:
         print("[elegir] la IA devolvio una lista vacia")
     elif not clips:
@@ -193,7 +178,7 @@ def _estado_gemini(r, datos):
         print("[elegir] Gemini:", consejos[r.status_code])
 
 
-def con_gemini(segmentos, picos_seg, duracion_total, visuales=None):
+def con_gemini(segmentos, picos_seg, duracion_total):
     import requests
     global _gemini_modelo_activo, _gemini_pausa_hasta
     if not config.GEMINI_API_KEY.strip():
@@ -203,9 +188,6 @@ def con_gemini(segmentos, picos_seg, duracion_total, visuales=None):
         print("[elegir] Gemini en pausa por error anterior")
         return None
     prompt = _armar_prompt(segmentos, picos_seg, duracion_total)
-    if config.MEMES_SELECTIVOS:
-        prompt += """\nREGLAS ADICIONALES DE MEMES (prevalecen sobre las reglas incompatibles anteriores):
-Puedes seleccionar reacciones, gestos, movimientos y contrastes visibles aunque no haya diálogo, solamente si los fotogramas aportan evidencia clara. Las imágenes son muestras aproximadas; no inventes movimientos entre ellas ni emociones internas. Conserva la duración y el mínimo viral existentes. Un silencio con acción visual graciosa no es motivo de descarte. No fuerces memes ni cuotas. Para cada clip conserva los ganchos tradicionales y añade opcionalmente puntaje_meme (entero 1-10), meme_blanco y meme_amarillo (máximo 5 palabras cada uno), evidencia_meme (descripción concreta de lo que se ve o escucha), y momento_meme (mm:ss dentro del clip). Solo propone meme si puntaje_meme >= 8 y la frase de humor cotidiano latinoamericano aporta un segundo sentido natural, sin presentar ficción como hecho, insultar, humillar, sexualizar ni trivializar momentos serios. Usa frases tipo POV o 'Cuando...' sin citas falsas. Si no es realmente gracioso, omite los campos meme. Si no hay imágenes, basa memes exclusivamente en diálogo comprobable. Conserva los filtros de seguridad. Devuelve el mismo JSON con estos campos opcionales por clip."""
     headers = {"x-goog-api-key": config.GEMINI_API_KEY.strip()}
     modelos = list(dict.fromkeys(x.removeprefix("models/") for x in
                    [_gemini_modelo_activo, config.GEMINI_MODELO, *config.GEMINI_ALTERNATIVOS] if x))
@@ -218,7 +200,7 @@ Puedes seleccionar reacciones, gestos, movimientos y contrastes visibles aunque 
             try:
                 r = requests.post(f"{_GEMINI_BASE}/{modelo}:generateContent", headers=headers,
                                   timeout=(10, 90), allow_redirects=False, json={
-                    "contents": [{"parts": [{"text": prompt}] + (visuales or [])}],
+                    "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"responseMimeType": "application/json"}})
             except requests.RequestException as e:
                 print("[elegir] Gemini red:", type(e).__name__)
@@ -336,31 +318,16 @@ def marcar_bajito(segmentos, z):
         s["bajito"] = bool(len(tramo)) and float(np.mean(tramo)) < -0.6
 
 
-def elegir(segmentos, z, picos_seg, duracion_total, video=None):
+def elegir(segmentos, z, picos_seg, duracion_total):
     marcar_bajito(segmentos, z)
     clips = None
     for nombre in config.ELEGIDORES:
         funcion = {"claude": con_claude, "gemini": con_gemini, "codex": con_codex}.get(nombre)
         if funcion:
-            if nombre == "gemini" and video and config.MEMES_SELECTIVOS:
-                visuales = []
-                try:
-                    from .visual import partes
-                    visuales = partes(video, duracion_total)
-                except Exception as e:
-                    print("[visual] muestreo no disponible:", type(e).__name__)
-                if not visuales and not segmentos:
-                    continue
-                clips = funcion(segmentos, picos_seg, duracion_total, visuales)
-            else:
-                if not segmentos:
-                    continue
-                clips = funcion(segmentos, picos_seg, duracion_total)
+            clips = funcion(segmentos, picos_seg, duracion_total)
             if clips is not None:
                 print(f"[elegir] eligió: {nombre}")
                 break
-    if clips is None and not segmentos:
-        return []
     if clips is None:
         print("[elegir] uso el método de respaldo")
         clips = respaldo(segmentos, z, duracion_total)
